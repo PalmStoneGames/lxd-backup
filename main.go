@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -35,7 +36,7 @@ func main() {
 
 	// Validate
 	if *zpool == "" || *bucket == "" {
-		fmt.Println("Both zpool and bucket arguments must be specified")
+		log.Println("Both zpool and bucket arguments must be specified")
 		return
 	}
 
@@ -52,21 +53,21 @@ func main() {
 	// Init cloud storage client
 	storageClient, err := storage.NewClient(context.Background(), cloud.WithTokenSource(google.ComputeTokenSource("")))
 	if err != nil {
-		fmt.Printf("Error while creating cloud storage client: %v\n", err)
+		log.Printf("Error while creating cloud storage client: %v\n", err)
 		return
 	}
 
 	// Init LXD client
 	lxdClient, err := lxd.NewClient(&lxd.DefaultConfig, "local")
 	if err != nil {
-		fmt.Printf("Error while creating lxd client: %v\n", err)
+		log.Printf("Error while creating lxd client: %v\n", err)
 		return
 	}
 
 	// Get list of containers
 	containers, err := lxdClient.ListContainers()
 	if err != nil {
-		fmt.Printf("Error while listing containers: %v\n", err)
+		log.Printf("Error while listing containers: %v\n", err)
 		return
 	}
 
@@ -82,12 +83,12 @@ func main() {
 				snapshotName := fmt.Sprintf("backup-%v-%v", startTimeStamp, seed)
 				resp, err := lxdClient.Snapshot(container.Name, snapshotName, false)
 				if err != nil {
-					fmt.Printf("Snapshotting failed for container %v: %v\n", container.Name, err)
+					log.Printf("Snapshotting failed for container %v: %v\n", container.Name, err)
 				}
 
 				err = lxdClient.WaitForSuccess(resp.Operation)
 				if err != nil {
-					fmt.Printf("Waiting for snapshot for container %v failed: %v", container.Name, err)
+					log.Printf("Waiting for snapshot for container %v failed: %v", container.Name, err)
 				}
 
 				snapshots <- &snapshotInfo{
@@ -128,28 +129,28 @@ func main() {
 				return
 			}
 
-			fmt.Printf("zfs send successful for %v\n", info.ContainerName)
+			log.Printf("zfs send successful for %v\n", info.ContainerName)
 
 			if err := w.Close(); err != nil {
-				fmt.Printf("Error finalizing snapshot compression for snapshot %v/%v: %v\n", info.ContainerName, info.SnapshotName, err)
+				log.Printf("Error finalizing snapshot compression for snapshot %v/%v: %v\n", info.ContainerName, info.SnapshotName, err)
 				return
 			}
 
 			if err := storageWriter.Close(); err != nil {
-				fmt.Printf("Error finalizing cloud storage upload for snapshot %v/%v: %v\n", info.ContainerName, info.SnapshotName, err)
+				log.Printf("Error finalizing cloud storage upload for snapshot %v/%v: %v\n", info.ContainerName, info.SnapshotName, err)
 				return
 			}
 
 			// We're done uploading, delete the local snapshot
 			resp, err := lxdClient.Delete(fmt.Sprintf("%v/%v", info.ContainerName, info.SnapshotName))
 			if err != nil {
-				fmt.Printf("Error while initiating delete operation for snapshot %v/%v: %v\n", info.ContainerName, info.SnapshotName, err)
+				log.Printf("Error while initiating delete operation for snapshot %v/%v: %v\n", info.ContainerName, info.SnapshotName, err)
 				return
 			}
 
 			err = lxdClient.WaitForSuccess(resp.Operation)
 			if err != nil {
-				fmt.Printf("Waiting for delete for snapshot %v/%v failed: %v", info.ContainerName, info.SnapshotName, err)
+				log.Printf("Waiting for delete for snapshot %v/%v failed: %v", info.ContainerName, info.SnapshotName, err)
 				return
 			}
 		}(info)
